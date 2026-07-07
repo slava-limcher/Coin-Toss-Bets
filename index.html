@@ -298,6 +298,7 @@
       <div class="tvfoot">
         <button class="btn gold" id="flipBtn">LOCK BETS &amp; FLIP</button>
         <button class="btn ghost" id="againBtn" style="display:none">Flip another</button>
+        <button class="btn ghost" id="demoBtn2" title="Run a demo flip">▶ Demo</button>
         <button class="btn ghost" id="backBtn1">← Change game</button>
       </div>
     </section>
@@ -320,6 +321,7 @@
       <div class="matchline" id="phMatch"></div>
       <div class="prompt" id="phPrompt">Who wins the toss?</div>
       <div class="teamgrid" id="phTeamGrid"></div>
+      <button class="btn gold" id="phLockBtn" style="width:100%;margin:2px 0 12px;display:none">Lock in bet</button>
       <div id="phResult"></div>
       <div class="actions" style="justify-content:space-between">
         <span id="phYou" style="color:var(--dim);font-size:13px"></span>
@@ -524,13 +526,19 @@ if(!ROOM){
   function markHostPick(){
     $('#betCounts').querySelectorAll('.teamcard').forEach(x=>x.classList.toggle('sel', x.dataset.side===GUESS));
   }
-  function updateCounts(){
-    let a=0,h=0; NET.conns.forEach(c=>{ if(c._pick==='away')a++; else if(c._pick==='home')h++; });
+  function betSplit(){
+    let a=0,h=0;
+    NET.conns.forEach(c=>{ if(c._pick==='away')a++; else if(c._pick==='home')h++; });   // only locked picks reach _pick
     BOTS.forEach(b=>{ if(b.pick==='away')a++; else if(b.pick==='home')h++; });
     if(GUESS==='away')a++; else if(GUESS==='home')h++;
+    const total=a+h, pa=total?Math.round(a/total*100):0;
+    return {a,h,total,pa,ph:total?100-pa:0};
+  }
+  function updateCounts(){
+    const s=betSplit();
     const ca=$('#betCounts').querySelector('[data-cnt="away"]'); const ch=$('#betCounts').querySelector('[data-cnt="home"]');
-    if(ca) ca.textContent = a+(a===1?' bet':' bets');
-    if(ch) ch.textContent = h+(h===1?' bet':' bets');
+    if(ca) ca.textContent = s.total? s.pa+'%' : '—';
+    if(ch) ch.textContent = s.total? s.ph+'%' : '—';
   }
   function players(){
     const arr = NET.conns.filter(c=>c._name).map(c=>({name:c._name,score:c._score||0,pick:c._pick||null,correct:c._correct}));
@@ -689,9 +697,10 @@ if(!ROOM){
 
   // ---- hosting ----
   function snapshot(){
-    const g=CURRENT||{};
+    const g=CURRENT||{}; const s=betSplit();
     return { t:"state", phase:PHASE, result:RESULT,
       game: g.away ? {away:g.away,home:g.home,name:g.name,state:g.state} : null,
+      tally:{pa:s.pa,ph:s.ph,total:s.total},
       leaderboard: players().slice(0,12) };
   }
   function personalSnap(conn){ const s=snapshot(); s.you={pick:conn._pick||null,score:conn._score||0,correct:conn._correct}; return s; }
@@ -746,6 +755,7 @@ if(!ROOM){
   $('#dateInput').onchange = loadGames;
   $('#upcomingBtn').onclick = ()=>{ $('#dateInput').value=''; loadGames(); };
   $('#demoBtn').onclick = runDemo;
+  $('#demoBtn2').onclick = runDemo;
   $('#flipBtn').onclick = onFlip;
   $('#backBtn1').onclick = ()=>{ cancelAnimationFrame(raf); anim.mode='idle'; FLIPPED=true; clearTimeout(pollTimer); show('pickScreen'); };
   $('#againBtn').onclick = ()=>{ cancelAnimationFrame(raf); anim.mode='idle'; FLIPPED=true; clearTimeout(pollTimer); show('pickScreen'); };
@@ -775,7 +785,7 @@ else {
   $('#tvRoot').classList.add('hidden');
   $('#phRoot').classList.remove('hidden');
   document.title = "Join — Toss Call";
-  const PH = { code:ROOM, name:"", peer:null, conn:null, state:null };
+  const PH = { code:ROOM, name:"", peer:null, conn:null, state:null, sel:null, lastGame:null };
 
   $('#phFoot').textContent = "Room "+ROOM;
   $('#phStatus').textContent = hasPeer() ? ("Enter your name to join room "+ROOM+".") : "Can't connect — no internet / PeerJS unavailable.";
@@ -805,33 +815,56 @@ else {
       $('#phStatus').textContent=(ty==="peer-unavailable")?("Room "+PH.code+" not found — ask the host to open the room."):("Connection error: "+ty);
     });
   }
-  function sendPick(side){
+  // Send the locked-in pick. Only fires from the Lock button; a pick can't be changed once sent.
+  function lockInBet(){
     if(!PH.conn||!PH.conn.open) return;
     const st=PH.state; if(!st||st.phase!=='betting') return;
-    PH.conn.send({t:"pick",side});
+    if(st.you&&st.you.pick) return;          // already locked
+    if(PH.sel!=='away'&&PH.sel!=='home') return;
+    PH.conn.send({t:"pick",side:PH.sel});    // host records it; echoed back as you.pick → locked
   }
   function renderPhone(){
     const st=PH.state; if(!st) return;
     const g=st.game, you=st.you||{};
+    const lockedIn = !!you.pick, canBet = st.phase==='betting' && !lockedIn;
     if(g){
       $('#phMatch').textContent = g.name + (g.state==='post'?' • Final':g.state==='in'?' • Live':' • Upcoming');
-      // build/refresh team cards
+      if(g.name!==PH.lastGame){ PH.lastGame=g.name; PH.sel=null; }   // new game → clear tentative pick
+      // build/refresh team cards; cards are inert unless we can still bet
       const grid=$('#phTeamGrid');
-      const locked = st.phase!=='betting' ? ' locked' : '';
-      if(grid.dataset.for!==g.name || grid.dataset.locked!==locked){
-        grid.dataset.for=g.name; grid.dataset.locked=locked;
-        grid.innerHTML = teamCardHTML(g.away,'away',locked) + teamCardHTML(g.home,'home',locked);
+      const cl = canBet ? '' : ' locked';
+      if(grid.dataset.for!==g.name || grid.dataset.cl!==cl){
+        grid.dataset.for=g.name; grid.dataset.cl=cl;
+        grid.innerHTML = teamCardHTML(g.away,'away',cl) + teamCardHTML(g.home,'home',cl);
         grid.querySelectorAll('.teamcard').forEach(c=>{
-          c.onclick = ()=>{ if(st.phase==='betting') sendPick(c.dataset.side); };
+          c.onclick = ()=>{ const s=PH.state; if(s&&s.phase==='betting'&&!(s.you&&s.you.pick)){ PH.sel=c.dataset.side; renderPhone(); } };
         });
       }
-      grid.querySelectorAll('.teamcard').forEach(x=>x.classList.toggle('sel', x.dataset.side===you.pick));
+      const hl = lockedIn ? you.pick : PH.sel;
+      grid.querySelectorAll('.teamcard').forEach(x=>x.classList.toggle('sel', x.dataset.side===hl));
+      // live bet split (percentages)
+      if(st.tally){
+        const ca=grid.querySelector('[data-cnt="away"]'), ch=grid.querySelector('[data-cnt="home"]');
+        if(ca) ca.textContent = st.tally.total? st.tally.pa+'%' : '—';
+        if(ch) ch.textContent = st.tally.total? st.tally.ph+'%' : '—';
+      }
     }
+    // lock button
+    const lockBtn=$('#phLockBtn');
+    if(canBet){
+      lockBtn.style.display='';
+      if(PH.sel){ lockBtn.disabled=false; lockBtn.textContent='Lock in '+(PH.sel==='away'?g.away.abbr:g.home.abbr); }
+      else { lockBtn.disabled=true; lockBtn.textContent='Pick a team first'; }
+    } else if(lockedIn && st.phase==='betting'){
+      lockBtn.style.display=''; lockBtn.disabled=true; lockBtn.textContent='✓ Locked in: '+(you.pick==='away'?g.away.abbr:g.home.abbr);
+    } else { lockBtn.style.display='none'; }
     // prompt / result
     const prompt=$('#phPrompt'), res=$('#phResult');
     if(st.phase==='betting'){
       $('#phSub').textContent="Call the toss!";
-      prompt.textContent = you.pick ? "Locked on "+(you.pick==='away'?g.away.abbr:g.home.abbr)+" — tap to change" : "Who wins the toss?";
+      prompt.textContent = lockedIn
+        ? "Locked in — good luck! 🤞"
+        : (PH.sel ? "Tap “Lock in” to confirm" : "Pick a team, then lock it in");
       res.innerHTML='';
     } else if(st.phase==='flipping'){
       $('#phSub').textContent="Coin in the air…";
@@ -860,6 +893,7 @@ else {
   }
 
   $('#phJoinBtn').onclick = join;
+  $('#phLockBtn').onclick = lockInBet;
   $('#phName').addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); join(); } });
 }
 </script>
