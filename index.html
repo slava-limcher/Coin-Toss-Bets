@@ -679,7 +679,8 @@ if(!ROOM){
         '<div class="wf-sub">Wins the toss</div>'+
       '</div>';
     document.body.appendChild(el);
-    requestAnimationFrame(()=>el.classList.add('show'));
+    // setTimeout (not rAF) so the reveal still fires in throttled/background tabs
+    setTimeout(()=>el.classList.add('show'), 30);
     fireConfetti();
     winFxTimer=setTimeout(()=>fireConfetti(), 1400);   // second burst
     // auto-settle back to the board after the celebration
