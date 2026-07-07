@@ -147,7 +147,9 @@
 
   /* ===================== BIG WIN TAKEOVER ===================== */
   #winfx{position:fixed;inset:0;z-index:55;display:flex;align-items:center;justify-content:center;
-    background:radial-gradient(circle at 50% 44%, rgba(10,14,22,.55), rgba(6,9,15,.9));
+    background:radial-gradient(circle at 50% 42%,
+      color-mix(in srgb, var(--wc, #ffd23f) 34%, #0a0e16) 0%,
+      #0a0e16 60%, #05070c 100%);   /* fully opaque — hides the board behind */
     opacity:0;transition:opacity .45s ease}
   #winfx.show{opacity:1}
   #winfx .wf-rays{position:absolute;width:170vmax;height:170vmax;left:50%;top:44%;transform:translate(-50%,-50%);
