@@ -166,7 +166,7 @@
 
   /* leaderboard: top right */
   .corner{position:absolute}
-  .lead-corner{top:3vh;right:2.5vw;width:min(23vw,300px);max-height:46vh;display:flex;flex-direction:column;min-height:0}
+  .lead-corner{top:3vh;right:2.5vw;width:min(23vw,300px);max-height:40vh;display:flex;flex-direction:column;min-height:0}
   .lead-corner .lead{overflow:auto;min-height:0;margin-top:6px}
   /* QR: bottom right */
   .qr-corner{bottom:3vh;right:2.5vw}
@@ -190,11 +190,11 @@
   body.viewing #betCounts .teamcard .tname{font-size:clamp(13px,2vmin,18px)}
   body.viewing #betCounts .teamcard .cnt{margin:0 0 0 auto;font-size:clamp(14px,2.4vmin,20px)}
 
-  body.viewing .room{flex-direction:column;padding:12px;margin:0;gap:8px;flex:0 0 auto}
-  body.viewing .room img{width:min(13vw,140px);height:min(13vw,140px)}
+  body.viewing .room{flex-direction:column;padding:14px;margin:0;gap:9px;flex:0 0 auto}
+  body.viewing .room img{width:min(21vw,250px);height:min(21vw,250px)}
   body.viewing .room .rc{text-align:center;min-width:0}
-  body.viewing .room .rlabel{font-size:clamp(10px,1.4vmin,12px)}
-  body.viewing .room .code{font-size:clamp(24px,4vmin,40px)}
+  body.viewing .room .rlabel{font-size:clamp(11px,1.5vmin,13px)}
+  body.viewing .room .code{font-size:clamp(28px,4.8vmin,48px)}
   body.viewing .room .rurl, body.viewing .room .rstatus{display:none}   /* long text not needed on TV */
   body.viewing .lead-corner .sechead{margin:0;text-align:right}
 
@@ -207,8 +207,8 @@
     .tvhead{max-width:92vw}
     .tvcenter{width:92vw;gap:1.2vh}
     body.viewing .coin{width:min(56vw,30vh);height:min(56vw,30vh)}
-    .lead-corner{width:min(42vw,260px);max-height:30vh}
-    body.viewing .room img{width:min(24vw,120px);height:min(24vw,120px)}
+    .lead-corner{width:min(42vw,260px);max-height:28vh}
+    body.viewing .room img{width:min(38vw,200px);height:min(38vw,200px)}
   }
 </style>
 </head>
@@ -226,6 +226,7 @@
         <label>or date</label>
         <input type="date" id="dateInput"/>
         <button class="btn ghost" id="reloadBtn" title="Reload">↻</button>
+        <button class="btn ghost" id="demoBtn" title="Run a demo toss with sample bettors">▶ Demo</button>
       </div>
       <div id="listHead" class="sechead" style="display:none"></div>
       <div id="gameList" class="games"><div class="empty"><span class="spinner"></span> Loading games…</div></div>
@@ -363,6 +364,17 @@ function joinURL(code){ return location.origin+location.pathname+"?room="+code; 
 if(!ROOM){
   let CURRENT=null, GUESS=null, RESULT=null, raf=null, PHASE='betting';
   let PENDING=null, ARMED=false, FLIPPED=false, pollTimer=null;
+  let DEMO=false, BOTS=[], firstGame=null;
+  const DEMO_NAMES=['Riley','Jordan','Sam','Alex','Casey','Morgan','Taylor','Devin','Quinn'];
+  function makeBots(){
+    const n=4+Math.floor(Math.random()*3), used={}, bots=[];
+    for(let i=0;i<n;i++){
+      let nm; do{ nm=DEMO_NAMES[Math.floor(Math.random()*DEMO_NAMES.length)]; }while(used[nm]);
+      used[nm]=1;
+      bots.push({name:nm, score:Math.floor(Math.random()*3), pick:Math.random()<0.5?'away':'home', correct:null});
+    }
+    return bots;
+  }
   const NET={hosting:false,peer:null,conns:[],code:null};
 
   function show(id){
@@ -376,6 +388,7 @@ if(!ROOM){
     const head = $('#listHead');
     list.innerHTML = '<div class="empty"><span class="spinner"></span> Loading games…</div>';
     head.style.display='none';
+    firstGame=null;
     const val = $('#dateInput').value;
     // No date picked → "Upcoming": ESPN's plain scoreboard returns the current/next week's slate.
     let url = API + '/scoreboard';
@@ -419,7 +432,9 @@ if(!ROOM){
             <div class="meta">${esc(stTxt)}</div>
           </div>
           <span class="pill ${pillClass}">${pillTxt}</span>`;
-        el.onclick = ()=> openToss({ id: ev.id, away, home, state, name: `${away.name} @ ${home.name}` });
+        const gameObj = { id: ev.id, away, home, state, name: `${away.name} @ ${home.name}` };
+        if(!firstGame) firstGame = gameObj;   // remember one real matchup for the Demo button
+        el.onclick = ()=> openToss(gameObj);
         list.appendChild(el);
       });
     }catch(e){
@@ -428,16 +443,19 @@ if(!ROOM){
   }
 
   // ---- SCREEN 2: toss room ----
-  function openToss(game){
+  function openToss(game, isDemo){
+    DEMO = !!isDemo;
+    BOTS = DEMO ? makeBots() : [];
     CURRENT=game; GUESS=null; RESULT=null; PHASE='betting';
-    PENDING=null; ARMED=false; FLIPPED=false; clearTimeout(pollTimer);
+    PENDING = DEMO ? (Math.random()<0.5?'away':'home') : null;   // demo picks a random winner
+    ARMED=false; FLIPPED=false; clearTimeout(pollTimer);
     cancelAnimationFrame(raf); anim.mode='idle';
     NET.conns.forEach(c=>{ c._pick=null; c._correct=null; });
     renderMatchup();
     buildCoin();
     $('#coin').style.transform='rotateX(0deg)';
     $('#tvPrompt').textContent = 'Who will win the toss?';
-    $('#statusMain').textContent = 'Betting open';
+    $('#statusMain').textContent = DEMO ? 'Demo — betting open' : 'Betting open';
     $('#statusSub').textContent = '';
     $('#resultBox').innerHTML='';
     $('#flipBtn').style.display=''; $('#flipBtn').disabled=false; $('#flipBtn').textContent='LOCK BETS & FLIP';
@@ -447,7 +465,16 @@ if(!ROOM){
     show('tossScreen');
     startHosting();
     broadcast();
-    bgPoll();               // start listening for the real toss result right away
+    if(DEMO){ setTimeout(()=>{ if(PHASE==='betting') onFlip(); }, 2200); }  // auto-run the flip
+    else { bgPoll(); }      // real game: listen for the actual toss result
+  }
+  function runDemo(){
+    const g = firstGame
+      ? { id:null, state:'pre', name:firstGame.name, away:firstGame.away, home:firstGame.home }
+      : { id:null, state:'pre', name:'Away @ Home',
+          away:{abbr:'AWY', name:'Away', full:'Away Team', color:'#c8102e', logo:''},
+          home:{abbr:'HME', name:'Home', full:'Home Team', color:'#1c6cff', logo:''} };
+    openToss(g, true);
   }
 
   function renderMatchup(){
@@ -475,6 +502,7 @@ if(!ROOM){
   }
   function updateCounts(){
     let a=0,h=0; NET.conns.forEach(c=>{ if(c._pick==='away')a++; else if(c._pick==='home')h++; });
+    BOTS.forEach(b=>{ if(b.pick==='away')a++; else if(b.pick==='home')h++; });
     if(GUESS==='away')a++; else if(GUESS==='home')h++;
     const ca=$('#betCounts').querySelector('[data-cnt="away"]'); const ch=$('#betCounts').querySelector('[data-cnt="home"]');
     if(ca) ca.textContent = a+(a===1?' bet':' bets');
@@ -482,7 +510,8 @@ if(!ROOM){
   }
   function players(){
     const arr = NET.conns.filter(c=>c._name).map(c=>({name:c._name,score:c._score||0,pick:c._pick||null,correct:c._correct}));
-    if(GUESS!==null || (PHASE==='revealed')) arr.push({name:'📺 TV (host)',score:HOST_SCORE,pick:GUESS,correct:HOST_CORRECT,host:true});
+    BOTS.forEach(b=>arr.push({name:b.name,score:b.score,pick:b.pick,correct:b.correct}));
+    if(GUESS!==null || (PHASE==='revealed' && !DEMO)) arr.push({name:'📺 TV (host)',score:HOST_SCORE,pick:GUESS,correct:HOST_CORRECT,host:true});
     arr.sort((a,b)=>b.score-a.score);
     return arr;
   }
@@ -556,7 +585,7 @@ if(!ROOM){
   }
   // Silent background poll: caches the toss result. If armed, triggers the flip.
   async function bgPoll(){
-    if(!CURRENT || PHASE==='revealed' || FLIPPED) return;
+    if(DEMO || !CURRENT || PHASE==='revealed' || FLIPPED) return;
     try{
       const r = await fetch(API + '/summary?event=' + CURRENT.id + '&_=' + Date.now());
       const data = await r.json();
@@ -595,8 +624,9 @@ if(!ROOM){
     const winTeam = RESULT==='away'?CURRENT.away:CURRENT.home;
     // score everyone
     NET.conns.forEach(c=>{ if(c._pick){ c._correct=(c._pick===RESULT); if(c._correct) c._score=(c._score||0)+1; } });
+    BOTS.forEach(b=>{ if(b.pick){ b.correct=(b.pick===RESULT); if(b.correct) b.score++; } });
     if(GUESS){ HOST_CORRECT=(GUESS===RESULT); if(HOST_CORRECT) HOST_SCORE++; }
-    const anyWin = NET.conns.some(c=>c._correct) || HOST_CORRECT;
+    const anyWin = NET.conns.some(c=>c._correct) || BOTS.some(b=>b.correct) || HOST_CORRECT;
     $('#statusMain').textContent=''; $('#statusSub').textContent='';
     $('#resultBox').innerHTML = `
       <div class="result">
@@ -669,6 +699,7 @@ if(!ROOM){
   $('#reloadBtn').onclick = loadGames;
   $('#dateInput').onchange = loadGames;
   $('#upcomingBtn').onclick = ()=>{ $('#dateInput').value=''; loadGames(); };
+  $('#demoBtn').onclick = runDemo;
   $('#flipBtn').onclick = onFlip;
   $('#backBtn1').onclick = ()=>{ cancelAnimationFrame(raf); anim.mode='idle'; FLIPPED=true; clearTimeout(pollTimer); show('pickScreen'); };
   $('#againBtn').onclick = ()=>{ cancelAnimationFrame(raf); anim.mode='idle'; FLIPPED=true; clearTimeout(pollTimer); show('pickScreen'); };
