@@ -143,7 +143,30 @@
   a{color:var(--accent)}
   .spinner{display:inline-block;width:14px;height:14px;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:sp .8s linear infinite;vertical-align:-2px}
   @keyframes sp{to{transform:rotate(360deg)}}
-  #confetti{position:fixed;inset:0;pointer-events:none;z-index:50}
+  #confetti{position:fixed;inset:0;pointer-events:none;z-index:60}
+
+  /* ===================== BIG WIN TAKEOVER ===================== */
+  #winfx{position:fixed;inset:0;z-index:55;display:flex;align-items:center;justify-content:center;
+    background:radial-gradient(circle at 50% 44%, rgba(10,14,22,.55), rgba(6,9,15,.9));
+    opacity:0;transition:opacity .45s ease}
+  #winfx.show{opacity:1}
+  #winfx .wf-rays{position:absolute;width:170vmax;height:170vmax;left:50%;top:44%;transform:translate(-50%,-50%);
+    background:repeating-conic-gradient(from 0deg, color-mix(in srgb, var(--wc, #ffd23f) 22%, transparent) 0deg 5deg, transparent 5deg 12deg);
+    opacity:.55;animation:wfspin 20s linear infinite}
+  @keyframes wfspin{to{transform:translate(-50%,-50%) rotate(360deg)}}
+  #winfx .wf-card{position:relative;text-align:center;padding:3vmin;
+    transform:scale(.55);opacity:0;transition:transform .55s cubic-bezier(.18,1.4,.4,1),opacity .4s}
+  #winfx.show .wf-card{transform:scale(1);opacity:1}
+  #winfx .wf-logo{width:min(46vh,42vw);height:min(46vh,42vw);object-fit:contain;
+    filter:drop-shadow(0 0 46px var(--wc, #ffd23f)) drop-shadow(0 10px 26px rgba(0,0,0,.6));
+    animation:wfpulse 1.7s ease-in-out infinite}
+  #winfx .wf-abbr{font-size:min(30vh,26vw);font-weight:900;line-height:1;color:var(--wc,#ffd23f);
+    text-shadow:0 0 40px var(--wc,#ffd23f);animation:wfpulse 1.7s ease-in-out infinite}
+  @keyframes wfpulse{0%,100%{transform:scale(1)}50%{transform:scale(1.045)}}
+  #winfx .wf-name{font-size:clamp(28px,7vmin,90px);font-weight:900;letter-spacing:.4px;margin-top:1.5vh;
+    text-shadow:0 4px 22px rgba(0,0,0,.65)}
+  #winfx .wf-sub{font-size:clamp(16px,3.2vmin,40px);font-weight:800;letter-spacing:.35em;
+    color:var(--accent);margin-top:1vh;text-transform:uppercase}
 
   /* ===================== FULL-SCREEN TV (viewing) ===================== */
   body.viewing{padding:0;overflow:hidden}
@@ -444,6 +467,7 @@ if(!ROOM){
 
   // ---- SCREEN 2: toss room ----
   function openToss(game, isDemo){
+    clearWinFx();
     DEMO = !!isDemo;
     BOTS = DEMO ? makeBots() : [];
     CURRENT=game; GUESS=null; RESULT=null; PHASE='betting';
@@ -638,7 +662,28 @@ if(!ROOM){
     $('#againBtn').style.display='';
     renderBetCards(); renderLeaderboard();
     broadcast();
-    if(anyWin) fireConfetti();
+    showWinFx(winTeam);
+  }
+  // Big full-screen win takeover: winning team's logo + rays + confetti, then settles.
+  function clearWinFx(){ const e=document.getElementById('winfx'); if(e) e.remove(); }
+  let winFxTimer=null;
+  function showWinFx(team){
+    clearWinFx(); clearTimeout(winFxTimer);
+    const el=document.createElement('div'); el.id='winfx';
+    el.style.setProperty('--wc', team.color||'#ffd23f');
+    el.innerHTML =
+      '<div class="wf-rays"></div>'+
+      '<div class="wf-card">'+
+        (team.logo?`<img class="wf-logo" src="${team.logo}" alt="">`:`<div class="wf-abbr">${esc(team.abbr)}</div>`)+
+        `<div class="wf-name">${esc(team.full)}</div>`+
+        '<div class="wf-sub">Wins the toss</div>'+
+      '</div>';
+    document.body.appendChild(el);
+    requestAnimationFrame(()=>el.classList.add('show'));
+    fireConfetti();
+    winFxTimer=setTimeout(()=>fireConfetti(), 1400);   // second burst
+    // auto-settle back to the board after the celebration
+    setTimeout(()=>{ if(el){ el.classList.remove('show'); setTimeout(()=>{ if(el&&el.parentNode) el.remove(); }, 500); } }, 4600);
   }
 
   // ---- hosting ----
