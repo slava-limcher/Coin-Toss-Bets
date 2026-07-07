@@ -144,6 +144,67 @@
   .spinner{display:inline-block;width:14px;height:14px;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:sp .8s linear infinite;vertical-align:-2px}
   @keyframes sp{to{transform:rotate(360deg)}}
   #confetti{position:fixed;inset:0;pointer-events:none;z-index:50}
+
+  /* ===================== FULL-SCREEN TV (viewing) ===================== */
+  body.viewing{padding:0;overflow:hidden}
+  body.viewing #tvRoot{max-width:none;width:100%;height:100%}
+  body.viewing > h1, body.viewing #tvRoot > h1{display:none}   /* drop branding while viewing */
+
+  body.viewing #tossScreen.on{
+    position:fixed;inset:0;
+    display:grid;grid-template-rows:auto minmax(0,1fr) auto;
+    gap:2vh;padding:3.2vh 3vw;
+  }
+  .tvhead{display:flex;align-items:center;justify-content:center}
+  .tvmatch{display:flex;align-items:center;gap:2.4vw}
+  .tvmatch .tvteam{display:flex;align-items:center;gap:1vw}
+  .tvmatch .tvteam img{width:clamp(34px,8vmin,92px);height:clamp(34px,8vmin,92px);object-fit:contain;filter:drop-shadow(0 3px 6px rgba(0,0,0,.5))}
+  .tvmatch .tvteam .nm{font-weight:900;font-size:clamp(20px,4.6vmin,60px);letter-spacing:.3px}
+  .tvmatch .tvvs{opacity:.4;font-weight:800;font-size:clamp(16px,3vmin,34px)}
+
+  .tvbody{display:flex;align-items:center;justify-content:center;gap:3vw;min-height:0}
+  .tvcoincol{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1.4vh;flex:1 1 auto;min-width:0}
+  .tvside{display:flex;flex-direction:column;gap:1.4vh;width:min(28vw,320px);min-width:190px;max-height:100%;min-height:0}
+
+  body.viewing .stage{height:auto;margin:0}
+  body.viewing .coin{width:min(42vh,40vw);height:min(42vh,40vw)}
+  body.viewing .coin .face .fl{width:42%;height:42%}
+  body.viewing .coin .face .fa{font-size:clamp(20px,7vmin,46px)}
+
+  body.viewing .status{font-size:clamp(16px,2.6vmin,26px);margin:0}
+  body.viewing .statusdim{font-size:clamp(12px,1.8vmin,16px)}
+  body.viewing .result{margin-top:.6vh}
+  body.viewing .verdict{font-size:clamp(26px,5.6vmin,66px)}
+  body.viewing .rline{font-size:clamp(13px,2vmin,20px)}
+  body.viewing #tvPrompt{display:none}   /* redundant — tallies show the teams */
+
+  body.viewing #betCounts{gap:10px;margin:0;width:100%;max-width:560px}
+  body.viewing #betCounts .teamcard{flex-direction:row;justify-content:flex-start;padding:10px 14px;gap:10px}
+  body.viewing #betCounts .teamcard .tlogo{width:clamp(26px,4vmin,42px);height:clamp(26px,4vmin,42px)}
+  body.viewing #betCounts .teamcard .tside{display:none}
+  body.viewing #betCounts .teamcard .tname{font-size:clamp(13px,2vmin,18px)}
+  body.viewing #betCounts .teamcard .cnt{margin:0 0 0 auto;font-size:clamp(14px,2.4vmin,20px)}
+
+  body.viewing .room{flex-direction:column;padding:12px;margin:0;gap:8px;flex:0 0 auto}
+  body.viewing .room img{width:min(15vw,150px);height:min(15vw,150px)}
+  body.viewing .room .rc{text-align:center;min-width:0}
+  body.viewing .room .rlabel{font-size:clamp(10px,1.4vmin,12px)}
+  body.viewing .room .code{font-size:clamp(24px,4vmin,40px)}
+  body.viewing .room .rurl, body.viewing .room .rstatus{display:none}   /* long text not needed on TV */
+  body.viewing .tvside .sechead{margin:0}
+  body.viewing #leaderboard{overflow:auto;min-height:0}
+
+  .tvfoot{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin:0}
+  body.viewing .tvfoot .btn{opacity:.85}
+
+  /* portrait / narrow screens: stack the side under the coin */
+  @media (max-aspect-ratio:1/1){
+    body.viewing .tvbody{flex-direction:column;gap:2vh}
+    body.viewing .tvside{width:100%;max-width:560px;flex-direction:row;flex-wrap:wrap;align-items:flex-start}
+    body.viewing .tvside .room{flex:1 1 auto}
+    body.viewing .tvside .lead{flex:2 1 60%}
+    body.viewing .coin{width:min(52vw,32vh);height:min(52vw,32vh)}
+  }
 </style>
 </head>
 <body>
@@ -152,7 +213,6 @@
   <!-- ==================== TV / HOST ==================== -->
   <div class="wrap" id="tvRoot">
     <h1>Toss <span class="em">Call</span></h1>
-    <div class="sub" id="tvSub">Pick a game · phones scan to bet · TV flips the coin. Real NFL data.</div>
 
     <!-- SCREEN 1: PICK GAME -->
     <section id="pickScreen" class="screen on">
@@ -166,47 +226,46 @@
       <div id="gameList" class="games"><div class="empty"><span class="spinner"></span> Loading games…</div></div>
     </section>
 
-    <!-- SCREEN 2: TOSS ROOM -->
+    <!-- SCREEN 2: TOSS ROOM (full-screen TV view) -->
     <section id="tossScreen" class="screen">
-      <div class="matchline" id="matchLine2"></div>
+      <div class="tvhead"><div class="tvmatch" id="tvMatch"></div></div>
 
-      <div class="room" id="roomPanel">
-        <img id="qrImg" alt="Join QR">
-        <div class="rc">
-          <div class="rlabel">SCAN TO BET · CODE</div>
-          <div class="code" id="roomCode">····</div>
-          <div class="rurl" id="joinUrl"></div>
-          <div class="rstatus" id="joinStatus"></div>
+      <div class="tvbody">
+        <div class="tvcoincol">
+          <div class="stage">
+            <div class="coin" id="coin">
+              <div class="face front" id="faceFront"></div>
+              <div class="face back" id="faceBack"></div>
+            </div>
+          </div>
+          <div class="status" id="statusMain"></div>
+          <div class="statusdim" id="statusSub"></div>
+          <div id="resultBox"></div>
+          <div class="prompt" id="tvPrompt">Who will win the toss?</div>
+          <div class="teamgrid" id="betCounts"></div>
         </div>
+
+        <aside class="tvside">
+          <div class="room" id="roomPanel">
+            <img id="qrImg" alt="Join QR">
+            <div class="rc">
+              <div class="rlabel">SCAN TO PLAY</div>
+              <div class="code" id="roomCode">····</div>
+              <div class="rurl" id="joinUrl"></div>
+              <div class="rstatus" id="joinStatus"></div>
+            </div>
+          </div>
+          <div class="sechead">Leaderboard</div>
+          <div class="lead" id="leaderboard"></div>
+        </aside>
       </div>
 
-      <div class="stage">
-        <div class="coin" id="coin">
-          <div class="face front" id="faceFront"></div>
-          <div class="face back" id="faceBack"></div>
-        </div>
-      </div>
-      <div class="status" id="statusMain"></div>
-      <div class="statusdim" id="statusSub"></div>
-      <div id="resultBox"></div>
-
-      <div class="actions">
+      <div class="tvfoot">
         <button class="btn gold" id="flipBtn">LOCK BETS &amp; FLIP</button>
-        <button class="btn ghost" id="againBtn" style="display:none">Flip another game</button>
+        <button class="btn ghost" id="againBtn" style="display:none">Flip another</button>
         <button class="btn ghost" id="backBtn1">← Change game</button>
       </div>
-
-      <div class="prompt" id="tvPrompt">Who will win the toss?</div>
-      <div class="teamgrid" id="betCounts"></div>
-      <div class="sechead">Leaderboard</div>
-      <div class="lead" id="leaderboard"></div>
     </section>
-
-    <div class="footnote">
-      Live NFL data from ESPN's public feed. The coin resolves to the team that receives the opening kickoff
-      (the visible outcome of the real coin toss). Phones join over the internet via WebRTC — host this page at a
-      web address (not a double-clicked file) for phone join to work.
-    </div>
   </div>
 
   <!-- ==================== PHONE ==================== -->
@@ -295,7 +354,10 @@ if(!ROOM){
   let PENDING=null, ARMED=false, FLIPPED=false, pollTimer=null;
   const NET={hosting:false,peer:null,conns:[],code:null};
 
-  function show(id){ ['pickScreen','tossScreen'].forEach(s=>$('#'+s).classList.toggle('on', s===id)); }
+  function show(id){
+    ['pickScreen','tossScreen'].forEach(s=>$('#'+s).classList.toggle('on', s===id));
+    document.body.classList.toggle('viewing', id==='tossScreen');   // full-screen TV on the toss screen
+  }
 
   // ---- SCREEN 1: load games ----
   async function loadGames(){
@@ -360,12 +422,12 @@ if(!ROOM){
     PENDING=null; ARMED=false; FLIPPED=false; clearTimeout(pollTimer);
     cancelAnimationFrame(raf); anim.mode='idle';
     NET.conns.forEach(c=>{ c._pick=null; c._correct=null; });
-    $('#matchLine2').textContent = game.name + (game.state==='post'?' • Final':game.state==='in'?' • Live':' • Upcoming');
+    renderMatchup();
     buildCoin();
     $('#coin').style.transform='rotateX(0deg)';
     $('#tvPrompt').textContent = 'Who will win the toss?';
-    $('#statusMain').textContent = 'Place your bets — the coin flips when the real toss comes in.';
-    $('#statusSub').textContent = 'Phones scan to pick a team. The coin resolves to the actual toss.';
+    $('#statusMain').textContent = 'Betting open';
+    $('#statusSub').textContent = '';
     $('#resultBox').innerHTML='';
     $('#flipBtn').style.display=''; $('#flipBtn').disabled=false; $('#flipBtn').textContent='LOCK BETS & FLIP';
     $('#againBtn').style.display='none';
@@ -377,6 +439,14 @@ if(!ROOM){
     bgPoll();               // start listening for the real toss result right away
   }
 
+  function renderMatchup(){
+    if(!CURRENT) return;
+    const g=CURRENT, L=t=>t.logo?`<img src="${t.logo}" alt="">`:'';
+    $('#tvMatch').innerHTML =
+      `<div class="tvteam">${L(g.away)}<span class="nm">${esc(g.away.name)}</span></div>`+
+      `<span class="tvvs">@</span>`+
+      `<div class="tvteam"><span class="nm">${esc(g.home.name)}</span>${L(g.home)}</div>`;
+  }
   function renderBetCards(){
     const host = $('#betCounts'); if(!CURRENT){host.innerHTML='';return;}
     const locked = PHASE!=='betting' ? ' locked' : '';
@@ -468,10 +538,8 @@ if(!ROOM){
     renderLeaderboard();
     if(PENDING){ doFlip(); }   // result already in hand → flip now
     else {
-      $('#statusMain').textContent = 'Bets locked — awaiting the toss…';
-      $('#statusSub').textContent = (CURRENT.state==='pre')
-        ? 'The coin flips the moment the game kicks off.'
-        : 'Reading the opening drive…';
+      $('#statusMain').textContent = 'Bets locked';
+      $('#statusSub').textContent = (CURRENT.state==='pre') ? 'Awaiting kickoff…' : 'Reading the toss…';
     }
     broadcast();
   }
